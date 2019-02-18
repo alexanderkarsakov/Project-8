@@ -1,0 +1,84 @@
+---
+title: "Machine Learning Project"
+author: "Alex"
+date: '18/02/2019'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prediction Assignment 
+
+## Instructions
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+set.seed(1337)
+```
+
+## Loading and training data 
+
+```{r}
+ds.train = read.csv("pml-training.csv", strip.white=TRUE)
+ds.test  = read.csv("pml-testing.csv",  strip.white=TRUE)
+```
+
+```{r}
+completeColumnsId = which(!apply(is.na(ds.train), 2, any) == TRUE)
+divZeroColumnsId  = which(!apply(ds.train == "#DIV/0!", 2, any, na.rm=TRUE) == TRUE)
+ds.train.sub = select(ds.train, intersect(completeColumnsId, divZeroColumnsId))
+ds.test.sub  = select(ds.test,  intersect(completeColumnsId, divZeroColumnsId))
+ds.train.pred = select(ds.train.sub, roll_belt:classe)
+ds.test.pred  = select(ds.test.sub,  roll_belt:magnet_forearm_z)
+```
+
+## Building model
+
+The input dataset is large, we split it into training and validation datasets in 60% and 40% proportions, respectively.
+We will use kNN classifier. We make cross-validation to choose the best *n*.
+
+```{r}
+inTrain = createDataPartition(y=ds.train.pred$classe,
+                              p=0.6, list=FALSE)
+ds.valid.pred = filter(ds.train.pred, !(row_number() %in% inTrain))
+ds.train.pred = filter(ds.train.pred, row_number() %in% inTrain)
+ctrl = trainControl(method="repeatedcv", number=10, repeats=3)
+knnFit = train(classe ~ ., data=ds.train.pred, method="knn",
+                trControl=ctrl, metric="Accuracy", tuneLength=5,
+                preProc=c("center", "scale"))
+knnPredict = predict(knnFit, newdata=ds.valid.pred)
+cmat = confusionMatrix(knnPredict, ds.valid.pred$classe)
+```
+
+## Predicting results
+
+```{r}
+answers = predict(knnFit, newdata=ds.test.pred)
+```
+
+```{r}
+pml_write_files = function(x)
+{
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+pml_write_files(answers)
+```
+
+
+
+
+
+
